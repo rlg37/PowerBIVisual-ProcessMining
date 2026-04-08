@@ -1,0 +1,28 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "sourceType": "module",
+    "project": "./tsconfig.json"
+  },
+  "plugins": [
+    "powerbi-visuals"
+  ],
+  "env": {
+    "browser": true,
+    "es2017": true
+  },
+  "rules": {
+    "powerbi-visuals/no-banned-terms": "error",
+    "powerbi-visuals/no-document-domain": "error",
+    "powerbi-visuals/no-document-write": "error",
+    "powerbi-visuals/no-http-string": ["error", ["http://www.example.com/?.*", "http://localhost:?.*", "^http:\\/\\/www.w3.org\\/2000\\/svg"]],
+    "powerbi-visuals/no-implied-inner-html": "error",
+    "powerbi-visuals/no-inner-outer-html": "error",
+    "powerbi-visuals/no-string-based-set-immediate": "error",
+    "powerbi-visuals/non-literal-fs-path": "error",
+    "powerbi-visuals/non-literal-require": "error",
+    "powerbi-visuals/insecure-random": "error",
+    "powerbi-visuals/mocha-avoid-only": "error"
+  }
+}

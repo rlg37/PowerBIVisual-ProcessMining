@@ -1,0 +1,25 @@
+/*
+ * ProcessMiningVisual - visual.less
+ * Minimal base styles; visual rendering is handled programmatically via D3.
+ */
+
+.processMiningVisual {
+    font-family: "Segoe UI", sans-serif;
+    user-select: none;
+
+    .node {
+        transition: opacity 120ms ease;
+
+        &:hover .node-rect {
+            filter: brightness(1.12);
+        }
+    }
+
+    .node-rect {
+        transition: fill 150ms ease, stroke 150ms ease;
+    }
+
+    text {
+        pointer-events: none;
+    }
+}

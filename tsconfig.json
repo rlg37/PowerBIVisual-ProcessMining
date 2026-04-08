@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "lib": ["ES6", "DOM"],
+    "module": "commonjs",
+    "outDir": "./.tmp/build/",
+    "strict": false,
+    "noImplicitAny": false,
+    "sourceMap": true,
+    "experimentalDecorators": true,
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "typeRoots": [
+      "./node_modules/@types",
+      "./node_modules/powerbi-visuals-api"
+    ],
+    "types": [
+      "powerbi-visuals-api"
+    ]
+  },
+  "files": [
+  "src/visual.ts",
+  "src/settings.ts"
+]
+}
