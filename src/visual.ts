@@ -187,6 +187,15 @@ export class Visual implements IVisual {
             // Power BI's allowInteractions only gates cross-visual filtering, not internal UX
             this.selectionManager.clear().then(() => this.paintHighlight([], false));
         });
+
+        // Context menu on empty space (no data point selected)
+        this.svgWrap.on("contextmenu", (event: MouseEvent) => {
+            event.preventDefault();
+            this.selectionManager.showContextMenu(null, {
+                x: event.clientX,
+                y: event.clientY
+            });
+        });
     }
 
     // ── update ────────────────────────────────────────────────────────────────
@@ -673,12 +682,30 @@ export class Visual implements IVisual {
             edgeG.append("rect")
                 .attr("x", mx - lw / 2).attr("y", my - lh / 2)
                 .attr("width", lw).attr("height", lh).attr("rx", 3)
-                .attr("fill", eLblBg).attr("stroke", eArrow).attr("stroke-width", 0.5);
+                .attr("fill", eLblBg).attr("stroke", eArrow).attr("stroke-width", 0.5)
+                .style("cursor", "pointer")
+                .on("contextmenu", (event: MouseEvent) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.selectionManager.showContextMenu(null, {
+                        x: event.clientX,
+                        y: event.clientY
+                    });
+                });
             edgeG.append("text")
                 .attr("x", mx).attr("y", my)
                 .attr("text-anchor", "middle").attr("dominant-baseline", "middle")
                 .attr("font-size", `${fz}px`).attr("font-family", "Segoe UI, sans-serif")
                 .attr("fill", eLblC).text(lbl)
+                .style("cursor", "pointer")
+                .on("contextmenu", (event: MouseEvent) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.selectionManager.showContextMenu(null, {
+                        x: event.clientX,
+                        y: event.clientY
+                    });
+                })
                 .append("title")
                     .text(`Avg ${vm.measureName}: ${edge.durationValue.toFixed(2)} ${s.edgeFormat.measureUnit}`);
         });
@@ -1007,15 +1034,56 @@ export class Visual implements IVisual {
     // ── Landing page ──────────────────────────────────────────────────────────
     private renderLanding(viewport: powerbi.IViewport): void {
         this.svgWrap.attr("width", viewport.width).attr("height", viewport.height - TOOLBAR_H);
-        const cx = viewport.width / 2; const cy = (viewport.height - TOOLBAR_H) / 2;
-        this.diagramG.append("text").attr("x", cx).attr("y", cy - 12)
-            .attr("text-anchor", "middle").attr("font-size", "14px")
-            .attr("font-family", "Segoe UI Semibold, Segoe UI, sans-serif").attr("fill", "#605E5C")
+        const cx  = viewport.width  / 2;
+        const cy  = (viewport.height - TOOLBAR_H) / 2;
+        const g   = this.diagramG;
+
+        // Title
+        g.append("text").attr("x", cx).attr("y", cy - 80)
+            .attr("text-anchor", "middle").attr("font-size", "16px")
+            .attr("font-weight", "600")
+            .attr("font-family", "Segoe UI Semibold, Segoe UI, sans-serif").attr("fill", "#201F1E")
             .text("Process Mining Flow");
-        this.diagramG.append("text").attr("x", cx).attr("y", cy + 10)
+
+        // Subtitle
+        g.append("text").attr("x", cx).attr("y", cy - 56)
             .attr("text-anchor", "middle").attr("font-size", "12px")
-            .attr("font-family", "Segoe UI, sans-serif").attr("fill", "#A19F9D")
-            .text("Add Stage and Duration Measure fields to begin.");
+            .attr("font-family", "Segoe UI, sans-serif").attr("fill", "#605E5C")
+            .text("Visualize sequential process stages and durations between them.");
+
+        // Divider
+        g.append("line")
+            .attr("x1", cx - 140).attr("y1", cy - 40)
+            .attr("x2", cx + 140).attr("y2", cy - 40)
+            .attr("stroke", "#EDEBE9").attr("stroke-width", 1);
+
+        // Hints & Tips header
+        g.append("text").attr("x", cx - 140).attr("y", cy - 22)
+            .attr("text-anchor", "start").attr("font-size", "11px")
+            .attr("font-weight", "600")
+            .attr("font-family", "Segoe UI Semibold, Segoe UI, sans-serif").attr("fill", "#0078D4")
+            .text("How to use:");
+
+        const tips = [
+            "1. Add a Stage field (e.g. stage name or index) to the Stage well.",
+            "2. Add a Duration Measure (e.g. avg days) to the Duration Measure well.",
+            "3. Optionally add a Count measure and an Expand By grouping field.",
+            "4. Use the toolbar to toggle Vertical / Horizontal layout or zoom in/out.",
+            "5. Click the Expand button to break each stage into sub-nodes.",
+            "6. Click a node to cross-filter other visuals; Ctrl+click for multi-select.",
+            "7. Right-click a node or duration label for the context menu."
+        ];
+
+        tips.forEach((tip, i) => {
+            g.append("text")
+                .attr("x", cx - 140)
+                .attr("y", cy - 4 + i * 16)
+                .attr("text-anchor", "start")
+                .attr("font-size", "11px")
+                .attr("font-family", "Segoe UI, sans-serif")
+                .attr("fill", "#605E5C")
+                .text(tip);
+        });
     }
 
     private trunc(v: string, max: number): string {

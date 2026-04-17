@@ -137,6 +137,7 @@
   },
   "supportsHighlight": true,
   "supportsMultiVisualSelection": true,
+  "supportsLandingPage": true,
   "sorting": { "default": {} },
   "privileges": []
 }
