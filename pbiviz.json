@@ -5,7 +5,7 @@
     "displayName": "Process Mining Flow",
     "guid": "ProcessMiningVisual1A2B3C4D5E6F7890",
     "visualClassName": "Visual",
-    "version": "1.0.1.0",
+    "version": "1.0.2.0",
     "description": "A process mining visual that displays sequential stage flow with measure-based durations between stages. Supports vertical and horizontal orientations and cross-filtering.",
     "supportUrl": "https://github.com/rlg37/PowerBIVisual-ProcessMining"
   },

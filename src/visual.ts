@@ -897,6 +897,7 @@ export class Visual implements IVisual {
             // Context menu: use first child's ID as anchor
             rect.on("contextmenu", (event: MouseEvent) => {
                 event.preventDefault();
+                event.stopPropagation();
                 this.selectionManager.showContextMenu(multiIds[0], {
                     x: event.clientX, y: event.clientY
                 });
@@ -926,6 +927,7 @@ export class Visual implements IVisual {
             })
             .on("contextmenu", (event: MouseEvent) => {
                 event.preventDefault();
+                event.stopPropagation();
                 this.selectionManager.showContextMenu(selId, {
                     x: event.clientX, y: event.clientY
                 });
