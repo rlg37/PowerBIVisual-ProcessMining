@@ -16,6 +16,7 @@ import VisualUpdateType          = powerbi.VisualUpdateType;
 import { VisualSettings } from "./settings";
 import * as d3 from "d3-selection";
 import { dataViewWildcard } from "powerbi-visuals-utils-dataviewutils";
+import { createTooltipServiceWrapper, ITooltipServiceWrapper } from "powerbi-visuals-utils-tooltiputils";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Interfaces
@@ -103,11 +104,13 @@ export class Visual implements IVisual {
     private zoomLevel:        number  = 100;
     // FIX: track whether interactions are allowed independently of isInFocus
     private allowInteractions: boolean = true;
+    private tooltipServiceWrapper: ITooltipServiceWrapper;
 
     constructor(options: VisualConstructorOptions) {
-        this.host             = options.host;
-        this.events           = options.host.eventService;
-        this.selectionManager = this.host.createSelectionManager();
+        this.host                 = options.host;
+        this.events               = options.host.eventService;
+        this.selectionManager     = this.host.createSelectionManager();
+        this.tooltipServiceWrapper = createTooltipServiceWrapper(this.host.tooltipService, options.element);
 
         this.rootDiv = d3.select(options.element)
             .append("div").classed("pm-root", true)
@@ -847,8 +850,37 @@ export class Visual implements IVisual {
             .attr("fill", fill).attr("stroke", stroke).attr("stroke-width", 1.5)
             .attr("opacity", opacity).style("cursor", "pointer");
 
+        // Keyboard navigation: make rect focusable and trigger click on Enter/Space
+        rect.attr("tabindex", "0")
+            .attr("role", "button")
+            .attr("aria-label", tooltip ? tooltip.split("\n")[0] : "Node")
+            .on("keydown", function(event: KeyboardEvent) {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    (this as SVGRectElement).dispatchEvent(
+                        new MouseEvent("click", { bubbles: true, ctrlKey: event.ctrlKey, metaKey: event.metaKey })
+                    );
+                }
+            });
+
+        // Power BI tooltip service
         if (tooltip) {
-            rect.append("title").text(tooltip);
+            const lines = tooltip.split("\n");
+            const header = lines[0];
+            const items: powerbi.extensibility.VisualTooltipDataItem[] = [];
+            for (let i = 1; i < lines.length; i++) {
+                const ci = lines[i].indexOf(":");
+                items.push(ci > -1
+                    ? { displayName: lines[i].slice(0, ci).trim(), value: lines[i].slice(ci + 1).trim(), header }
+                    : { displayName: lines[i], value: "", header }
+                );
+            }
+            if (items.length === 0) items.push({ displayName: header, value: "" });
+            this.tooltipServiceWrapper.addTooltip(
+                rect as any,
+                () => items,
+                () => selId ?? multiIds?.[0] ?? null
+            );
         }
 
         // Stamp the selection key directly on expand rects so paintHighlight can

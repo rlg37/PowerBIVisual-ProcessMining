@@ -135,6 +135,7 @@
       }
     }
   },
+  "supportsKeyboardFocus": true,
   "supportsHighlight": true,
   "supportsMultiVisualSelection": true,
   "supportsLandingPage": true,
