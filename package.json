@@ -1,7 +1,7 @@
 {
   "name": "process-mining-visual",
   "description": "Power BI custom visual for process mining — sequential stage flow with measure-based durations",
-  "version": "1.0.2.0",
+  "version": "1.0.5.0",
   "scripts": {
     "pbiviz": "pbiviz",
     "start": "pbiviz start",

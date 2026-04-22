@@ -188,8 +188,10 @@ export class Visual implements IVisual {
             this.selectionManager.clear().then(() => this.paintHighlight([], false));
         });
 
-        // Context menu on empty space (no data point selected)
-        this.svgWrap.on("contextmenu", (event: MouseEvent) => {
+        // Single catch-all context menu on the root container.
+        // Covers toolbar, scroll area, SVG background, and any gap.
+        // Node/edge handlers call stopPropagation so they never reach here.
+        this.rootDiv.on("contextmenu", (event: MouseEvent) => {
             event.preventDefault();
             this.selectionManager.showContextMenu(null, {
                 x: event.clientX,
