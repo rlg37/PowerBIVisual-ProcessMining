@@ -3,7 +3,7 @@
 A custom Power BI visual that renders sequential process flow diagrams with stage nodes,
 duration edges, and an optional drill-down breakdown view. Designed for **process mining**
 use cases where you want to visualize how cases (tickets, orders, patients, etc.) move
-through a defined sequence of stages and understand the average time spent between each step.
+through a defined sequence of stages and understand the average time spent in each step.
 
 **Visual GUID:** `ProcessMiningVisual1A2B3C4D5E6F7890`  
 **API version:** 5.3.0  
@@ -18,8 +18,10 @@ Process mining is the practice of reconstructing and analyzing real-world proces
 from event log data. This visual consumes that data and draws it as a **linear flow diagram**:
 
 - Each **stage node** represents a step in the process (e.g., `New → In Progress → Resolved`)
-- Each **edge arrow** between stages shows the **average duration** of time cases spent
-  transitioning between them
+- Each **edge arrow** leaving a stage is labelled with the **average duration** of the
+  stage it comes from (the time cases spent in that stage before moving on). When a
+  **Count** field is supplied this average is count-weighted, matching the stage's true
+  overall average.
 - An optional **Expand By** field breaks each stage node into sub-nodes grouped by a
   categorical attribute (e.g., Owner, Department, Region) to reveal which segments drive
   volume or delay
@@ -45,7 +47,10 @@ date-based duration measure.
 > *"Add Stage and Duration Measure fields to begin"*
 
 Stages are sorted **numerically** when all labels parse as integers, otherwise **alphabetically**.
-Edges display the **average** of the Duration Measure for all rows between consecutive stages.
+Each edge displays the **average** Duration Measure of its **source** stage. With a Count
+field this is a count-weighted average (`Σ duration×count / Σ count`); without one it is a
+simple average of the stage's rows. In **Expand** mode each sub-node gets its own arrow into
+the next stage, labelled with that sub-category's average.
 
 ---
 
@@ -63,7 +68,7 @@ Power BI DataView (categorical)
   buildViewModel()
   ├─ Groups rows by stage key → StageNode[] with aggregated count and duration
   ├─ Resolves per-stage conditional-format colors from category.objects[rowIdx]
-  └─ Builds StageEdge[] between consecutive nodes with avg duration labels
+  └─ Builds StageEdge[] between consecutive nodes, each labelled with the source stage's avg duration
           ↓
   renderFromState()
   ├─ SVG rect + text per StageNode (or expand children in expand mode)
