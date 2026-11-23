@@ -448,24 +448,32 @@ export class Visual implements IVisual {
             return null;
         };
 
-        interface EA { cs: number; ms: number; rc: number; fr: number; }
-        interface SA { cs: number; ms: number; rc: number; fr: number; em: Map<string, EA>; }
+        // ms = Σ measure (simple sum), mw = Σ (measure × count) (count-weighted sum),
+        // cs = Σ count, rc = row count. The stage/expand average is count-weighted
+        // when a Count field is present so that an unexpanded stage reports the true
+        // overall average (Σ dur×count / Σ count), not an average of per-group averages.
+        interface EA { cs: number; ms: number; mw: number; rc: number; fr: number; }
+        interface SA { cs: number; ms: number; mw: number; rc: number; fr: number; em: Map<string, EA>; }
         const sm = new Map<string, SA>();
 
         for (let i = 0; i < numRows; i++) {
             const sk = stageCol.values[i] == null ? "(blank)" : String(stageCol.values[i]);
-            if (!sm.has(sk)) sm.set(sk, { cs: 0, ms: 0, rc: 0, fr: i, em: new Map() });
+            if (!sm.has(sk)) sm.set(sk, { cs: 0, ms: 0, mw: 0, rc: 0, fr: i, em: new Map() });
             const sa = sm.get(sk)!;
-            sa.ms += measureCol ? (Number(measureCol.values[i]) || 0) : 0;
-            sa.cs += countCol   ? (Number(countCol.values[i])   || 0) : 0;
+            const mVal = measureCol ? (Number(measureCol.values[i]) || 0) : 0;
+            const cVal = countCol   ? (Number(countCol.values[i])   || 0) : 0;
+            sa.ms += mVal;
+            sa.cs += cVal;
+            sa.mw += mVal * cVal;
             sa.rc++;
 
             if (hasExpand) {
                 const ek = expandCol!.values[i] == null ? "(blank)" : String(expandCol!.values[i]);
-                if (!sa.em.has(ek)) sa.em.set(ek, { cs: 0, ms: 0, rc: 0, fr: i });
+                if (!sa.em.has(ek)) sa.em.set(ek, { cs: 0, ms: 0, mw: 0, rc: 0, fr: i });
                 const ea = sa.em.get(ek)!;
-                ea.ms += measureCol ? (Number(measureCol.values[i]) || 0) : 0;
-                ea.cs += countCol   ? (Number(countCol.values[i])   || 0) : 0;
+                ea.ms += mVal;
+                ea.cs += cVal;
+                ea.mw += mVal * cVal;
                 ea.rc++;
             }
         }
@@ -481,7 +489,9 @@ export class Visual implements IVisual {
                     .map(([ek, ea]) => ({
                         label:      ek,
                         count:      countCol ? ea.cs : ea.rc,
-                        measureAgg: ea.rc > 0 ? ea.ms / ea.rc : 0,
+                        measureAgg: countCol
+                            ? (ea.cs > 0 ? ea.mw / ea.cs : 0)   // count-weighted
+                            : (ea.rc > 0 ? ea.ms / ea.rc : 0),  // simple avg
                         // Single-category selection on the expand column only.
                         // Chaining withCategory(stageCol) + withCategory(expandCol)
                         // produces a compound predicate that Dataverse TDS cannot
@@ -505,7 +515,9 @@ export class Visual implements IVisual {
             return {
                 label,
                 count:       countCol ? sa.cs : sa.rc,
-                measureAgg:  sa.rc > 0 ? sa.ms / sa.rc : 0,
+                measureAgg:  countCol
+                    ? (sa.cs > 0 ? sa.mw / sa.cs : 0)   // count-weighted average
+                    : (sa.rc > 0 ? sa.ms / sa.rc : 0),  // simple avg when no Count field
                 index:       idx,
                 firstRowIdx: sa.fr,
                 selectionId: stageSelId!,
@@ -544,7 +556,7 @@ export class Visual implements IVisual {
             edges.push({
                 fromIndex:     i,
                 toIndex:       i + 1,
-                durationValue: (nodes[i].measureAgg + nodes[i + 1].measureAgg) / 2,
+                durationValue: nodes[i].measureAgg,
                 cfArrowColor:  cfArrow,
                 cfLabelFont:   cfLFont,
                 cfLabelBg:     cfLBg
@@ -658,61 +670,85 @@ export class Visual implements IVisual {
 
         // ── Edges ─────────────────────────────────────────────────────────────
         const edgeG = this.diagramG.append("g").classed("pm-edges", true);
-        vm.edges.forEach(edge => {
-            const f = centers[edge.fromIndex]; const t = centers[edge.toIndex];
-            const bF = boxes[edge.fromIndex];  const bT = boxes[edge.toIndex];
-            let x1: number, y1: number, x2: number, y2: number;
-            if (isV) {
-                x1 = f.cx; y1 = f.cy + bF.h / 2;
-                x2 = t.cx; y2 = t.cy - bT.h / 2 - ARROW_SZ;
-            } else {
-                x1 = f.cx + bF.w / 2;            y1 = f.cy;
-                x2 = t.cx - bT.w / 2 - ARROW_SZ; y2 = t.cy;
-            }
 
-            // Use CF-resolved color if available, else fall back to global setting
-            const eArrow = edge.cfArrowColor ?? arrowC;
-            const eLblC  = edge.cfLabelFont  ?? lblC;
-            const eLblBg = edge.cfLabelBg    ?? lblBg;
-
+        // Draws one arrow + duration label between two points. Shared by the
+        // single stage→stage edge and the per-expand-box edges in expand mode.
+        const drawEdge = (
+            x1: number, y1: number, x2: number, y2: number,
+            value: number, eArrow: string, eLblC: string, eLblBg: string,
+            tipLabel?: string
+        ): void => {
             edgeG.append("line")
                 .attr("x1", x1).attr("y1", y1).attr("x2", x2).attr("y2", y2)
                 .attr("stroke", eArrow).attr("stroke-width", 1.5)
                 .attr("marker-end", "url(#pmArrow)");
 
             const mx = (x1 + x2) / 2; const my = (y1 + y2) / 2;
-            const lbl = edge.durationValue.toFixed(1);
+            const lbl = value.toFixed(1);
             const fz  = s.edgeFormat.labelFontSize;
             const lw  = lbl.length * fz * 0.65 + 14; const lh = fz + 10;
+            const openMenu = (event: MouseEvent) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.selectionManager.showContextMenu(null, { x: event.clientX, y: event.clientY });
+            };
             edgeG.append("rect")
                 .attr("x", mx - lw / 2).attr("y", my - lh / 2)
                 .attr("width", lw).attr("height", lh).attr("rx", 3)
                 .attr("fill", eLblBg).attr("stroke", eArrow).attr("stroke-width", 0.5)
                 .style("cursor", "pointer")
-                .on("contextmenu", (event: MouseEvent) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.selectionManager.showContextMenu(null, {
-                        x: event.clientX,
-                        y: event.clientY
-                    });
-                });
+                .on("contextmenu", openMenu);
             edgeG.append("text")
                 .attr("x", mx).attr("y", my)
                 .attr("text-anchor", "middle").attr("dominant-baseline", "middle")
                 .attr("font-size", `${fz}px`).attr("font-family", "Segoe UI, sans-serif")
                 .attr("fill", eLblC).text(lbl)
                 .style("cursor", "pointer")
-                .on("contextmenu", (event: MouseEvent) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.selectionManager.showContextMenu(null, {
-                        x: event.clientX,
-                        y: event.clientY
-                    });
-                })
+                .on("contextmenu", openMenu)
                 .append("title")
-                    .text(`Avg ${vm.measureName}: ${edge.durationValue.toFixed(2)} ${s.edgeFormat.measureUnit}`);
+                    .text(`${tipLabel ? tipLabel + " — " : ""}Avg ${vm.measureName}: ${value.toFixed(2)} ${s.edgeFormat.measureUnit}`);
+        };
+
+        vm.edges.forEach(edge => {
+            const f = centers[edge.fromIndex]; const t = centers[edge.toIndex];
+            const bF = boxes[edge.fromIndex];  const bT = boxes[edge.toIndex];
+
+            // Use CF-resolved color if available, else fall back to global setting
+            const eArrow = edge.cfArrowColor ?? arrowC;
+            const eLblC  = edge.cfLabelFont  ?? lblC;
+            const eLblBg = edge.cfLabelBg    ?? lblBg;
+
+            const srcNode = vm.nodes[edge.fromIndex];
+            if (doExp && srcNode.expandNodes.length) {
+                // Expand mode: one arrow per sub-box, each fanning into the next
+                // stage and labelled with that sub-category's average duration.
+                const n = srcNode.expandNodes.length;
+                srcNode.expandNodes.forEach((en, ei) => {
+                    let x1: number, y1: number, x2: number, y2: number;
+                    if (isV) {
+                        const tw  = n * EXPAND_W + (n - 1) * EXPAND_GAP;
+                        const ecx = f.cx - tw / 2 + ei * (EXPAND_W + EXPAND_GAP) + EXPAND_W / 2;
+                        x1 = ecx;  y1 = f.cy + bF.h / 2;
+                        x2 = t.cx; y2 = t.cy - bT.h / 2 - ARROW_SZ;
+                    } else {
+                        const th  = n * EXPAND_H + (n - 1) * EXPAND_GAP;
+                        const ecy = f.cy - th / 2 + ei * (EXPAND_H + EXPAND_GAP) + EXPAND_H / 2;
+                        x1 = f.cx + bF.w / 2;            y1 = ecy;
+                        x2 = t.cx - bT.w / 2 - ARROW_SZ; y2 = t.cy;
+                    }
+                    drawEdge(x1, y1, x2, y2, en.measureAgg, eArrow, eLblC, eLblBg, en.label);
+                });
+            } else {
+                let x1: number, y1: number, x2: number, y2: number;
+                if (isV) {
+                    x1 = f.cx; y1 = f.cy + bF.h / 2;
+                    x2 = t.cx; y2 = t.cy - bT.h / 2 - ARROW_SZ;
+                } else {
+                    x1 = f.cx + bF.w / 2;            y1 = f.cy;
+                    x2 = t.cx - bT.w / 2 - ARROW_SZ; y2 = t.cy;
+                }
+                drawEdge(x1, y1, x2, y2, edge.durationValue, eArrow, eLblC, eLblBg);
+            }
         });
 
         // ── Nodes ─────────────────────────────────────────────────────────────
